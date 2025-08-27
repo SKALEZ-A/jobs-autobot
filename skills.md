@@ -1,0 +1,14 @@
+# My Web3 Skills
+- Blockchain Developer
+- Smart Contract Developer (Solidity, Rust, TON, Solana)
+- Fullstack Developer (React, Node.js, Express, MongoDB, Next.js)
+- DeFi Protocol Development (DEX, Staking, Yield Farming, Lending)
+- NFT Development (ERC721, ERC1155, NFT Marketplaces)
+- Telegram/Discord Bot Development
+- Web3 Mini Apps (TON, Telegram, Wallet integrations)
+- Community Manager / Moderator
+- Technical Writing & Documentation
+- Web3 Content Creator (Articles, Tutorials, Videos)
+- Security & Contract Audits (Basic to Intermediate)
+- Data Analytics (Dune, Trino SQL, Blockchain explorers)
+- DAO Setup & Governance Tools

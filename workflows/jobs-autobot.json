@@ -43,8 +43,8 @@
         "fields": { "string": [
           { "name": "telegramToken", "value": "={{$env.TELEGRAM_BOT_TOKEN}}" },
           { "name": "chatId", "value": "={{$env.TELEGRAM_CHAT_ID}}" },
-          { "name": "cmcApiKey", "value": "={{$env.CMC_API_KEY}}" },
-          { "name": "cgApiKey", "value": "={{$env.COINGECKO_API_KEY}}" }
+          { "name": "cmcApiKey", "value": "={{$env.CMC_API_KEY || '261b070a-0b16-4f31-8c3b-43019e4280be'}}" },
+          { "name": "cgApiKey", "value": "={{$env.COINGECKO_API_KEY || 'CG_HARDCODED_KEY_REPLACE'}}" }
         ]}
       },
       "id": "2",
@@ -58,8 +58,8 @@
         "fields": { "string": [
           { "name": "telegramToken", "value": "={{$env.TELEGRAM_BOT_TOKEN}}" },
           { "name": "chatId", "value": "={{$env.TELEGRAM_CHAT_ID}}" },
-          { "name": "cmcApiKey", "value": "={{$env.CMC_API_KEY}}" },
-          { "name": "cgApiKey", "value": "={{$env.COINGECKO_API_KEY}}" }
+          { "name": "cmcApiKey", "value": "={{$env.CMC_API_KEY || '261b070a-0b16-4f31-8c3b-43019e4280beE'}}" },
+          { "name": "cgApiKey", "value": "={{$env.COINGECKO_API_KEY || 'CG_HARDCODED_KEY_REPLACE'}}" }
         ]}
       },
       "id": "15",
@@ -116,6 +116,33 @@
       "typeVersion": 1,
       "continueOnFail": true,
       "position": [440, 700]
+    },
+    {
+      "parameters": { "method": "GET", "url": "https://cryptocurrencyjobs.co/feed/", "sendHeaders": true, "headerParametersJson": "={{ { \"User-Agent\": \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36\", \"Accept\": \"application/rss+xml,application/xml;q=0.9,*/*;q=0.8\" } }}", "options": { "responseFormat": "string", "ignoreResponseCode": true } },
+      "id": "33",
+      "name": "Fetch CryptocurrencyJobs RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "position": [440, 1240]
+    },
+    {
+      "parameters": { "method": "GET", "url": "https://cryptojobslist.com/jobs.rss", "sendHeaders": true, "headerParametersJson": "={{ { \"User-Agent\": \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36\", \"Accept\": \"application/rss+xml,application/xml;q=0.9,*/*;q=0.8\" } }}", "options": { "responseFormat": "string", "ignoreResponseCode": true } },
+      "id": "34",
+      "name": "Fetch CryptoJobsList RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "position": [440, 1420]
+    },
+    {
+      "parameters": { "method": "GET", "url": "https://remoteok.com/api", "options": { "responseFormat": "json", "ignoreResponseCode": true } },
+      "id": "35",
+      "name": "Fetch RemoteOK API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "position": [440, 1600]
     },
     {
       "parameters": {
@@ -182,7 +209,7 @@
       "position": [440, 700]
     },
     {
-      "parameters": { "mode": "passThrough", "output": 7 },
+      "parameters": { "mode": "passThrough", "output": 9 },
       "id": "10",
       "name": "Merge Sources",
       "type": "n8n-nodes-base.merge",
@@ -199,7 +226,7 @@
     },
     {
       "parameters": {
-        "functionCode": "// Parse HTML sources + CMC/CG JSON into unified job list + tokens (for digest)\nfunction getBody(nodeName){\n  const n=$items(nodeName,0,0)[0]?.json;\n  if(!n) return '';\n  if(typeof n==='string') return n;\n  if(typeof n.body==='string') return n.body;\n  if(typeof n.data==='string') return n.data;\n  return n.body||'';\n}\nconst sources = [\n  { key: 'web3.career', body: getBody('Fetch Web3.career'), base: 'https://web3.career' },\n  { key: 'cryptocurrencyjobs.co', body: getBody('Fetch CryptocurrencyJobs'), base: 'https://cryptocurrencyjobs.co' },\n  { key: 'cryptojobslist.com', body: getBody('Fetch CryptoJobsList'), base: 'https://cryptojobslist.com' },\n  { key: 'remote3.co', body: getBody('Fetch Remote3'), base: 'https://remote3.co' }\n];\nfunction stripTags(html){return (html||'').toString().replace(/<[^>]*>/g,' ').replace(/\\s+/g,' ').trim();}\nfunction toAbsolute(href, base){if(!href) return null; if(href.startsWith('http')) return href; if(href.startsWith('//')) return 'https:'+href; if(href.startsWith('/')) return base+href; return base+'/'+href;}\nfunction extractJobs(html, domain, base){\n  const results=[];\n  const re=/<a[^>]+href=\\\"([^\\\"]+)\\\"[^>]*>([\\s\\S]*?)<\\/a>/gi;\n  const blacklist=['about','blog','privacy','terms','newsletter','companies','salaries','subscribe','advertise'];\n  let m;\n  while((m=re.exec(html))!==null){\n    const href=toAbsolute(m[1], base); if(!href) continue;\n    const lower=href.toLowerCase();\n    if(!lower.includes(domain)) continue;\n    if(blacklist.some(b=>lower.includes('/'+b))) continue;\n    if(domain==='web3.career' && !/(remote|web3|blockchain|crypto|solidity|rust|engineer|developer)/.test(lower)) continue;\n    const title=stripTags(m[2]).slice(0,140);\n    if(!title||title.length<5) continue;\n    results.push({ title, url: href, source: domain });\n  }\n  const seen=new Set();\n  return results.filter(r=>{ if(seen.has(r.url)) return false; seen.add(r.url); return true; });\n}\nlet jobs=[];\nfor(const s of sources){ if(s.body){ jobs=jobs.concat(extractJobs(s.body, s.key, s.base)); } }\nconst cmc=$items('Fetch CMC New',0,0)[0]?.json;\nlet cmcTokens=[];\nif(cmc&&cmc.data&&Array.isArray(cmc.data)){\n  cmcTokens=cmc.data.slice(0,20).map(c=>({name:c.name,symbol:c.symbol,slug:c.slug,date_added:c.date_added,url:`https://coinmarketcap.com/currencies/${c.slug}/`}));\n}\nconst cgNode=$items('Fetch CoinGecko New',0,0)[0]?.json;\nlet cgArr=[];\nif(Array.isArray(cgNode)) cgArr=cgNode; else if(cgNode && typeof cgNode.body==='string'){ try{ const parsed=JSON.parse(cgNode.body); if(Array.isArray(parsed)) cgArr=parsed; }catch(e){} }\nlet cgTokens=[];\nif(Array.isArray(cgArr)){\n  cgTokens=cgArr.slice(0,20).map(x=>({name:x.name,symbol:x.symbol,slug:x.id,url:`https://www.coingecko.com/coins/${x.id}`}));\n}\nconst skills=['solidity','rust','smart contract','blockchain','web3','defi','nft','react','node.js','next.js','telegram','discord','ton','solana'];\nconst filteredJobs=jobs.filter(j=>{const t=j.title.toLowerCase(); return skills.some(s=>t.includes(s));}).slice(0,25);\nreturn [{ json: { jobs: filteredJobs, tokens: [...cmcTokens, ...cgTokens] } }];"
+        "functionCode": "// Parse HTML + RSS + API sources into unified job list + tokens (for digest)\nfunction getBody(nodeName){\n  const n=$items(nodeName,0,0)[0]?.json;\n  if(!n) return '';\n  if(typeof n==='string') return n;\n  if(typeof n.body==='string') return n.body;\n  if(typeof n.data==='string') return n.data;\n  return n.body||'';\n}\nfunction getJson(nodeName){\n  const n=$items(nodeName,0,0)[0]?.json;\n  return n||null;\n}\nconst htmlSources=[\n  { key: 'web3.career', body: getBody('Fetch Web3.career'), base: 'https://web3.career' },\n  { key: 'cryptocurrencyjobs.co', body: getBody('Fetch CryptocurrencyJobs'), base: 'https://cryptocurrencyjobs.co' },\n  { key: 'cryptojobslist.com', body: getBody('Fetch CryptoJobsList'), base: 'https://cryptojobslist.com' },\n  { key: 'remote3.co', body: getBody('Fetch Remote3'), base: 'https://remote3.co' }\n];\nconst rssSources=[\n  { key: 'cryptocurrencyjobs.co', body: getBody('Fetch CryptocurrencyJobs RSS') },\n  { key: 'cryptojobslist.com', body: getBody('Fetch CryptoJobsList RSS') }\n];\nfunction stripTags(html){return (html||'').toString().replace(/<[^>]*>/g,' ').replace(/\\s+/g,' ').trim();}\nfunction toAbsolute(href, base){if(!href) return null; if(href.startsWith('http')) return href; if(href.startsWith('//')) return 'https:'+href; if(href.startsWith('/')) return base+href; return base+'/'+href;}\nfunction extractJobsFromHtml(html, domain, base){\n  const results=[];\n  const re=/<a[^>]+href=\\\"([^\\\"]+)\\\"[^>]*>([\\s\\S]*?)<\\/a>/gi;\n  const blacklist=['about','blog','privacy','terms','newsletter','companies','salaries','subscribe','advertise'];\n  let m;\n  while((m=re.exec(html))!==null){\n    const href=toAbsolute(m[1], base); if(!href) continue;\n    const lower=href.toLowerCase();\n    if(!lower.includes(domain)) continue;\n    if(blacklist.some(b=>lower.includes('/'+b))) continue;\n    if(domain==='web3.career' && !/(remote|web3|blockchain|crypto|solidity|rust|engineer|developer)/.test(lower)) continue;\n    const title=stripTags(m[2]).slice(0,140);\n    if(!title||title.length<5) continue;\n    results.push({ title, url: href, source: domain });\n  }\n  const seen=new Set();\n  return results.filter(r=>{ if(seen.has(r.url)) return false; seen.add(r.url); return true; });\n}\nfunction extractJobsFromRss(xml, source){\n  const results=[];\n  const items=xml.match(/<item[\\s\\S]*?<\\/item>/gi)||[];\n  for(const it of items){\n    const t=(it.match(/<title>([\\s\\S]*?)<\\/title>/i)||[])[1]||'';\n    const l=(it.match(/<link>(https?:\\/\\/[^<]+)<\\/link>/i)||[])[1]||'';\n    const title=stripTags(t).slice(0,140);\n    if(title && l){ results.push({ title, url: l, source }); }\n  }\n  return results;\n}\nlet jobs=[];\nfor(const s of htmlSources){ if(s.body){ jobs=jobs.concat(extractJobsFromHtml(s.body, s.key, s.base)); } }\nfor(const s of rssSources){ if(s.body){ jobs=jobs.concat(extractJobsFromRss(s.body, s.key)); } }\nconst rok=getJson('Fetch RemoteOK API');\nif(Array.isArray(rok)){\n  for(const j of rok){\n    if(!j || !j.url || !j.position) continue;\n    const title=stripTags(j.position).slice(0,140);\n    const tags=(j.tags||[]).map(x=>String(x).toLowerCase());\n    const lower=title.toLowerCase();\n    const match=['crypto','blockchain','web3','solidity','rust','defi','nft','smart'].some(k=>lower.includes(k)||tags.includes(k));\n    if(match){ jobs.push({ title, url: j.url, source: 'remoteok.com' }); }\n  }\n}\nconst cmc=$items('Fetch CMC New',0,0)[0]?.json;\nlet cmcTokens=[];\nif(cmc&&cmc.data&&Array.isArray(cmc.data)){\n  cmcTokens=cmc.data.slice(0,20).map(c=>({name:c.name,symbol:c.symbol,slug:c.slug,date_added:c.date_added,url:`https://coinmarketcap.com/currencies/${c.slug}/`}));\n}\nconst cgNode=$items('Fetch CoinGecko New',0,0)[0]?.json;\nlet cgArr=[];\nif(Array.isArray(cgNode)) cgArr=cgNode; else if(cgNode && typeof cgNode.body==='string'){ try{ const parsed=JSON.parse(cgNode.body); if(Array.isArray(parsed)) cgArr=parsed; }catch(e){} }\nlet cgTokens=[];\nif(Array.isArray(cgArr)){\n  cgTokens=cgArr.slice(0,20).map(x=>({name:x.name,symbol:x.symbol,slug:x.id,url:`https://www.coingecko.com/coins/${x.id}`}));\n}\nconst skills=['solidity','rust','smart contract','blockchain','web3','defi','nft','react','node.js','next.js','telegram','discord','ton','solana'];\nconst filteredJobs=jobs.filter(j=>{const t=j.title.toLowerCase(); return skills.some(s=>t.includes(s));}).slice(0,25);\nreturn [{ json: { jobs: filteredJobs, tokens: [...cmcTokens, ...cgTokens] } }];"
       },
       "id": "11",
       "name": "Parse & Filter (Digest)",
@@ -209,7 +236,7 @@
     },
     {
       "parameters": {
-        "functionCode": "// Realtime new tokens filter using workflow static data (dedupe).\nconst cfg=$items('Config (Projects)',0,0)[0]?.json||{};\nconst cmc=$items('Fetch CMC New (P)',0,0)[0]?.json;\nconst cgNode=$items('Fetch CoinGecko New (P)',0,0)[0]?.json;\nlet cgArr=[];\nif(Array.isArray(cgNode)) cgArr=cgNode; else if(cgNode && typeof cgNode.body==='string'){ try{ const parsed=JSON.parse(cgNode.body); if(Array.isArray(parsed)) cgArr=parsed; }catch(e){} }\nlet tokens=[];\nif(cmc&&cmc.data&&Array.isArray(cmc.data)){ tokens=tokens.concat(cmc.data.map(c=>({slug:c.slug,name:c.name,symbol:c.symbol,url:`https://coinmarketcap.com/currencies/${c.slug}/`}))); }\nif(Array.isArray(cgArr)){ tokens=tokens.concat(cgArr.map(x=>({slug:x.id,name:x.name,symbol:x.symbol,url:`https://www.coingecko.com/coins/${x.id}`}))); }\nconst s=getWorkflowStaticData('global');\nif(!s.seenTokens) s.seenTokens={};\nconst now=Date.now();\nconst fresh=tokens.filter(t=>{ if(!t.slug) return false; if(s.seenTokens[t.slug]) return false; s.seenTokens[t.slug]=now; return true; });\n// prune if too many\nconst keys=Object.keys(s.seenTokens);\nif(keys.length>1000){ for(const k of keys.slice(0, keys.length-800)){ delete s.seenTokens[k]; } }\n// Always emit an item so downstream nodes run and can notify via Telegram.\nif(!fresh.length){\n  return [{ json: { tokens: [], chatId: cfg.chatId, token: cfg.telegramToken, note: 'no_new_tokens' } }];\n}\nreturn [{ json: { tokens: fresh, chatId: cfg.chatId, token: cfg.telegramToken, note: 'fresh' } }];"
+        "functionCode": "// Realtime new tokens filter using workflow static data (dedupe).\nconst cfg=$items('Config (Projects)',0,0)[0]?.json||{};\nconst cmc=$items('Fetch CMC New (P)',0,0)[0]?.json;\nconst cgNode=$items('Fetch CoinGecko New (P)',0,0)[0]?.json;\nlet cgArr=[];\nif(Array.isArray(cgNode)) cgArr=cgNode; else if(cgNode && typeof cgNode.body==='string'){ try{ const parsed=JSON.parse(cgNode.body); if(Array.isArray(parsed)) cgArr=parsed; }catch(e){} }\nlet tokens=[];\nif(cmc&&cmc.data&&Array.isArray(cmc.data)){ tokens=tokens.concat(cmc.data.map(c=>({slug:c.slug,name:c.name,symbol:c.symbol,url:`https://coinmarketcap.com/currencies/${c.slug}/`}))); }\nif(Array.isArray(cgArr)){ tokens=tokens.concat(cgArr.map(x=>({slug:x.id,name:x.name,symbol:x.symbol,url:`https://www.coingecko.com/coins/${x.id}`}))); }\nconst s=getWorkflowStaticData('global');\nif(!s.seenTokens) s.seenTokens={};\nconst now=Date.now();\nconst fresh=tokens.filter(t=>{ if(!t.slug) return false; if(s.seenTokens[t.slug]) return false; s.seenTokens[t.slug]=now; return true; });\n// prune if too many\nconst keys=Object.keys(s.seenTokens);\nif(keys.length>1000){ for(const k of keys.slice(0, keys.length-800)){ delete s.seenTokens[k]; } }\n// If no fresh tokens, stop and don't send any message.\nif(!fresh.length){ return []; }\nreturn [{ json: { tokens: fresh, chatId: cfg.chatId, token: cfg.telegramToken, note: 'fresh' } }];"
       },
       "id": "19",
       "name": "Filter New Tokens (Realtime)",
@@ -219,7 +246,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const payload=$json; const tokens=payload.tokens||[];\nfunction esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\nlet text='';\nif(!tokens.length){\n  text='⏳ No new tokens yet. I will keep watching.';\n} else {\n  const lines=tokens.map(t=>`• ${esc(t.name)} (${t.symbol})\\n  <a href=\\\"${t.url}\\\">${t.url}</a>`);\n  text='🆕 New Crypto Listings\\n'+lines.join('\\n');\n}\nif(text.length>3800) text=text.slice(0,3800)+'\\n...';\nreturn [{ json: { text, chatId: $json.chatId, token: $json.token } }];"
+        "functionCode": "const payload=$json; const tokens=payload.tokens||[];\nfunction esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\nif(!tokens.length){ return []; }\nlet text='';\nconst lines=tokens.map(t=>`• ${esc(t.name)} (${t.symbol})\\n  <a href=\\\"${t.url}\\\">${t.url}</a>`);\ntext='🆕 New Crypto Listings\\n'+lines.join('\\n');\nif(text.length>3800) text=text.slice(0,3800)+'\\n...';\nreturn [{ json: { text, chatId: $json.chatId, token: $json.token } }];"
       },
       "id": "20",
       "name": "Compose Token Message (Realtime)",
@@ -234,6 +261,7 @@
         "url": "https://api.telegram.org/bot8422046487:AAGdGwDUFYMKsdY9ufKrAReEMMSUHS-oAB4/sendMessage",
         "sendBody": true,
         "jsonParameters": true,
+        "specifyBody": "json",
         "jsonBody": "={{ { chat_id: 1037598009, text: $json.text || 'log', parse_mode: 'HTML', disable_web_page_preview: true } }}",
         "options": { "responseFormat": "json" }
       },
@@ -245,7 +273,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const cfg=$items('Config (Jobs)',0,0)[0]?.json||{};\nlet chatId=cfg.chatId;\nif(!chatId){const updates=$items('Get Updates',0,0)[0]?.json||{}; const last=updates.result&&updates.result.length?updates.result[updates.result.length-1]:null; chatId=last?.message?.chat?.id||chatId;}\nconst payload=$json; const jobs=payload.jobs||[]; const tokens=payload.tokens||[];\nfunction esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\nconst jobLines=jobs.map(j=>`• <b>${esc(j.title)}</b>\\n  <a href=\\\"${j.url}\\\">${j.url}</a> [${j.source}]`);\nconst tokenLines=tokens.map(t=>`• ${esc(t.name)} (${t.symbol})\\n  <a href=\\\"${t.url}\\\">${t.url}</a>`);\nlet text='🧭 Web3 Jobs & New Tokens Digest\\n\\n';\nif(jobLines.length){ text+='👨‍💻 Jobs (filtered):\\n'+jobLines.join('\\n')+'\\n\\n'; } else { text+='👨‍💻 Jobs: No matches found now.\\n\\n'; }\nif(tokenLines.length){ text+='🪙 New Tokens (snapshot):\\n'+tokenLines.join('\\n')+'\\n'; }\nif(text.length>3800) text=text.slice(0,3800)+'\\n...';\nreturn [{ json: { text, chatId, token: cfg.telegramToken } }];"
+        "functionCode": "const cfg=$items('Config (Jobs)',0,0)[0]?.json||{};\nlet chatId=cfg.chatId;\nif(!chatId){const updates=$items('Get Updates',0,0)[0]?.json||{}; const last=updates.result&&updates.result.length?updates.result[updates.result.length-1]:null; chatId=last?.message?.chat?.id||chatId;}\nconst payload=$json; const jobs=payload.jobs||[]; const tokens=payload.tokens||[];\nfunction esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}\nconst jobLines=jobs.map(j=>`• <b>${esc(j.title)}</b>\\n  <a href=\\\"${j.url}\\\">${j.url}</a> [${j.source}]`);\nconst tokenLines=tokens.map(t=>`• ${esc(t.name)} (${t.symbol})\\n  <a href=\\\"${t.url}\\\">${t.url}</a>`);\nif(!jobLines.length && !tokenLines.length){ return []; }\nlet text='🧭 Web3 Jobs & New Tokens Digest\\n\\n';\nif(jobLines.length){ text+='👨‍💻 Jobs (filtered):\\n'+jobLines.join('\\n')+'\\n\\n'; }\nif(tokenLines.length){ text+='🪙 New Tokens (snapshot):\\n'+tokenLines.join('\\n')+'\\n'; }\nif(text.length>3800) text=text.slice(0,3800)+'\\n...';\nreturn [{ json: { text, chatId, token: cfg.telegramToken } }];"
       },
       "id": "12",
       "name": "Compose Digest Message",
@@ -260,6 +288,7 @@
         "url": "https://api.telegram.org/bot8422046487:AAGdGwDUFYMKsdY9ufKrAReEMMSUHS-oAB4/sendMessage",
         "sendBody": true,
         "jsonParameters": true,
+        "specifyBody": "json",
         "jsonBody": "={{ { chat_id: 1037598009, text: $json.text || 'log', parse_mode: 'HTML', disable_web_page_preview: true } }}",
         "options": { "responseFormat": "json" }
       },
@@ -277,6 +306,7 @@
         "url": "https://api.telegram.org/bot8422046487:AAGdGwDUFYMKsdY9ufKrAReEMMSUHS-oAB4/sendMessage",
         "sendBody": true,
         "jsonParameters": true,
+        "specifyBody": "json",
         "jsonBody": "={{ { chat_id: 1037598009, text: $json.text || 'log', parse_mode: 'HTML', disable_web_page_preview: true } }}",
         "options": { "responseFormat": "json" }
       },
@@ -300,7 +330,7 @@
     ,
     {
       "parameters": {
-        "functionCode": "const cfg=$items('Config (Jobs)',0,0)[0]?.json||$items('Config (Projects)',0,0)[0]?.json||{};\nconst chatId=cfg.chatId||$env.TELEGRAM_CHAT_ID;\nconst token=cfg.telegramToken||$env.TELEGRAM_BOT_TOKEN;\nconst src='web3.career';\nconst it=$json;\nconst status=it.statusCode||0;\nconst body=typeof it.body==='string'?it.body:(typeof it.data==='string'?it.data:'');\nlet text='';\nif(status && status!==200){ text=`⛔ Blocked on ${src} (status ${status}).`; } else if(body){ text=`✅ Fetched ${src}: ${body.length} bytes.`; } else { text=`⚠️ Fetched ${src}: empty body.`; }\nreturn [{ json: { text, chatId, token } }];"
+        "functionCode": "const cfg=$items('Config (Jobs)',0,0)[0]?.json||$items('Config (Projects)',0,0)[0]?.json||{};\nconst chatId=cfg.chatId||$env.TELEGRAM_CHAT_ID;\nconst token=cfg.telegramToken||$env.TELEGRAM_BOT_TOKEN;\nconst src='web3.career';\nconst it=$json;\nconst status=it.statusCode||0;\nconst body=typeof it.body==='string'?it.body:(typeof it.data==='string'?it.data:'');\nlet text='';\nif(status && status!==200){ text=`⛔ Blocked on ${src} (status ${status}).`; } else if(body){ text=`✅ Fetched ${src}: ${body.length} bytes.`; } else { text=`⚠️ Fetched ${src}: empty body.`; }\nif(text.includes('empty body.')) return [];\nreturn [{ json: { text, chatId, token } }];"
       },
       "id": "23",
       "name": "Notify web3.career",
@@ -311,7 +341,7 @@
     ,
     {
       "parameters": {
-        "functionCode": "const cfg=$items('Config (Jobs)',0,0)[0]?.json||$items('Config (Projects)',0,0)[0]?.json||{};\nconst chatId=cfg.chatId||$env.TELEGRAM_CHAT_ID;\nconst token=cfg.telegramToken||$env.TELEGRAM_BOT_TOKEN;\nconst src='cryptocurrencyjobs.co';\nconst it=$json;\nconst status=it.statusCode||0;\nconst body=typeof it.body==='string'?it.body:(typeof it.data==='string'?it.data:'');\nlet text='';\nif(status && status!==200){ text=`⛔ Blocked on ${src} (status ${status}).`; } else if(body){ text=`✅ Fetched ${src}: ${body.length} bytes.`; } else { text=`⚠️ Fetched ${src}: empty body.`; }\nreturn [{ json: { text, chatId, token } }];"
+        "functionCode": "const cfg=$items('Config (Jobs)',0,0)[0]?.json||$items('Config (Projects)',0,0)[0]?.json||{};\nconst chatId=cfg.chatId||$env.TELEGRAM_CHAT_ID;\nconst token=cfg.telegramToken||$env.TELEGRAM_BOT_TOKEN;\nconst src='cryptocurrencyjobs.co';\nconst it=$json;\nconst status=it.statusCode||0;\nconst body=typeof it.body==='string'?it.body:(typeof it.data==='string'?it.data:'');\nlet text='';\nif(status && status!==200){ text=`⛔ Blocked on ${src} (status ${status}).`; } else if(body){ text=`✅ Fetched ${src}: ${body.length} bytes.`; } else { text=`⚠️ Fetched ${src}: empty body.`; }\nif(text.includes('empty body.')) return [];\nreturn [{ json: { text, chatId, token } }];"
       },
       "id": "24",
       "name": "Notify cryptocurrencyjobs.co",
@@ -322,7 +352,7 @@
     ,
     {
       "parameters": {
-        "functionCode": "const cfg=$items('Config (Jobs)',0,0)[0]?.json||$items('Config (Projects)',0,0)[0]?.json||{};\nconst chatId=cfg.chatId||$env.TELEGRAM_CHAT_ID;\nconst token=cfg.telegramToken||$env.TELEGRAM_BOT_TOKEN;\nconst src='cryptojobslist.com';\nconst it=$json;\nconst status=it.statusCode||0;\nconst body=typeof it.body==='string'?it.body:(typeof it.data==='string'?it.data:'');\nlet text='';\nif(status && status!==200){ text=`⛔ Blocked on ${src} (status ${status}).`; } else if(body){ text=`✅ Fetched ${src}: ${body.length} bytes.`; } else { text=`⚠️ Fetched ${src}: empty body.`; }\nreturn [{ json: { text, chatId, token } }];"
+        "functionCode": "const cfg=$items('Config (Jobs)',0,0)[0]?.json||$items('Config (Projects)',0,0)[0]?.json||{};\nconst chatId=cfg.chatId||$env.TELEGRAM_CHAT_ID;\nconst token=cfg.telegramToken||$env.TELEGRAM_BOT_TOKEN;\nconst src='cryptojobslist.com';\nconst it=$json;\nconst status=it.statusCode||0;\nconst body=typeof it.body==='string'?it.body:(typeof it.data==='string'?it.data:'');\nlet text='';\nif(status && status!==200){ text=`⛔ Blocked on ${src} (status ${status}).`; } else if(body){ text=`✅ Fetched ${src}: ${body.length} bytes.`; } else { text=`⚠️ Fetched ${src}: empty body.`; }\nif(text.includes('empty body.')) return [];\nreturn [{ json: { text, chatId, token } }];"
       },
       "id": "25",
       "name": "Notify cryptojobslist.com",
@@ -333,7 +363,7 @@
     ,
     {
       "parameters": {
-        "functionCode": "const cfg=$items('Config (Jobs)',0,0)[0]?.json||$items('Config (Projects)',0,0)[0]?.json||{};\nconst chatId=cfg.chatId||$env.TELEGRAM_CHAT_ID;\nconst token=cfg.telegramToken||$env.TELEGRAM_BOT_TOKEN;\nconst src='remote3.co';\nconst it=$json;\nconst status=it.statusCode||0;\nconst body=typeof it.body==='string'?it.body:(typeof it.data==='string'?it.data:'');\nlet text='';\nif(status && status!==200){ text=`⛔ Blocked on ${src} (status ${status}).`; } else if(body){ text=`✅ Fetched ${src}: ${body.length} bytes.`; } else { text=`⚠️ Fetched ${src}: empty body.`; }\nreturn [{ json: { text, chatId, token } }];"
+        "functionCode": "const cfg=$items('Config (Jobs)',0,0)[0]?.json||$items('Config (Projects)',0,0)[0]?.json||{};\nconst chatId=cfg.chatId||$env.TELEGRAM_CHAT_ID;\nconst token=cfg.telegramToken||$env.TELEGRAM_BOT_TOKEN;\nconst src='remote3.co';\nconst it=$json;\nconst status=it.statusCode||0;\nconst body=typeof it.body==='string'?it.body:(typeof it.data==='string'?it.data:'');\nlet text='';\nif(status && status!==200){ text=`⛔ Blocked on ${src} (status ${status}).`; } else if(body){ text=`✅ Fetched ${src}: ${body.length} bytes.`; } else { text=`⚠️ Fetched ${src}: empty body.`; }\nif(text.includes('empty body.')) return [];\nreturn [{ json: { text, chatId, token } }];"
       },
       "id": "26",
       "name": "Notify remote3.co",
@@ -389,7 +419,7 @@
   "connections": {
     "Manual": { "main": [ [ { "node": "Config (Jobs)", "type": "main", "index": 0 }, { "node": "Config (Projects)", "type": "main", "index": 0 }, { "node": "Notify Started", "type": "main", "index": 0 } ] ] },
     "Cron (Jobs Digest)": { "main": [ [ { "node": "Config (Jobs)", "type": "main", "index": 0 } ] ] },
-    "Config (Jobs)": { "main": [ [ { "node": "Get Updates", "type": "main", "index": 0 }, { "node": "Fetch Web3.career", "type": "main", "index": 0 }, { "node": "Fetch CryptocurrencyJobs", "type": "main", "index": 0 }, { "node": "Fetch CryptoJobsList", "type": "main", "index": 0 }, { "node": "Fetch Remote3", "type": "main", "index": 0 }, { "node": "Fetch CMC New", "type": "main", "index": 0 }, { "node": "Fetch CoinGecko New", "type": "main", "index": 0 } ] ] },
+    "Config (Jobs)": { "main": [ [ { "node": "Get Updates", "type": "main", "index": 0 }, { "node": "Fetch Web3.career", "type": "main", "index": 0 }, { "node": "Fetch CryptocurrencyJobs", "type": "main", "index": 0 }, { "node": "Fetch CryptoJobsList", "type": "main", "index": 0 }, { "node": "Fetch Remote3", "type": "main", "index": 0 }, { "node": "Fetch CMC New", "type": "main", "index": 0 }, { "node": "Fetch CoinGecko New", "type": "main", "index": 0 }, { "node": "Fetch CryptocurrencyJobs RSS", "type": "main", "index": 0 }, { "node": "Fetch CryptoJobsList RSS", "type": "main", "index": 0 }, { "node": "Fetch RemoteOK API", "type": "main", "index": 0 } ] ] },
     "Fetch Web3.career": { "main": [ [ { "node": "Merge Sources", "type": "main", "index": 0 }, { "node": "Notify web3.career", "type": "main", "index": 0 } ] ] },
     "Notify web3.career": { "main": [ [ { "node": "Send Telegram (Log)", "type": "main", "index": 0 } ] ] },
     "Fetch CryptocurrencyJobs": { "main": [ [ { "node": "Merge Sources", "type": "main", "index": 1 }, { "node": "Notify cryptocurrencyjobs.co", "type": "main", "index": 0 } ] ] },
@@ -397,6 +427,9 @@
     "Fetch CryptoJobsList": { "main": [ [ { "node": "Merge Sources", "type": "main", "index": 2 }, { "node": "Notify cryptojobslist.com", "type": "main", "index": 0 } ] ] },
     "Notify cryptojobslist.com": { "main": [ [ { "node": "Send Telegram (Log)", "type": "main", "index": 0 } ] ] },
     "Fetch Remote3": { "main": [ [ { "node": "Merge Sources", "type": "main", "index": 3 }, { "node": "Notify remote3.co", "type": "main", "index": 0 } ] ] },
+    "Fetch CryptocurrencyJobs RSS": { "main": [ [ { "node": "Merge Sources", "type": "main", "index": 6 } ] ] },
+    "Fetch CryptoJobsList RSS": { "main": [ [ { "node": "Merge Sources", "type": "main", "index": 7 } ] ] },
+    "Fetch RemoteOK API": { "main": [ [ { "node": "Merge Sources", "type": "main", "index": 8 } ] ] },
     "Notify remote3.co": { "main": [ [ { "node": "Send Telegram (Log)", "type": "main", "index": 0 } ] ] },
     "Fetch CMC New": { "main": [ [ { "node": "Merge Sources", "type": "main", "index": 4 }, { "node": "Notify CMC New", "type": "main", "index": 0 } ] ] },
     "Notify CMC New": { "main": [ [ { "node": "Send Telegram (Log)", "type": "main", "index": 0 } ] ] },
